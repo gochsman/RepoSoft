@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diseñador de Forros para Celular</title>
+    <!-- Tailwind CSS para un diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Biblioteca para interacciones táctiles más fluidas (Opcional, pero recomendada) -->
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <style>
+        /* Estilos personalizados */
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none; /* Previene el zoom del navegador en móviles al tocar */
+        }
+        
+        /* Contenedor del forro del celular con recorte de cámara */
+        #phone-case-container {
+            background-image: url('https://placehold.co/400x800/E2E8F0/E2E8F0?text=');
+            background-size: cover;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-radius: 40px; /* Bordes redondeados del teléfono */
+            border: 10px solid #1f2937; /* Borde del teléfono */
+            overflow: hidden; /* Oculta lo que se salga del forro */
+        }
+
+        /* Simulación del recorte de la cámara */
+        #camera-cutout {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 150px;
+            height: 50px;
+            background: #1f2937;
+            border-radius: 20px;
+            border: 4px solid #4b5563;
+        }
+
+        /* Área de diseño donde se arrastran las imágenes */
+        #design-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Estilo para las imágenes que se pueden manipular */
+        .draggable-image {
+            position: absolute;
+            border: 2px dashed transparent;
+            transition: border-color 0.2s;
+            cursor: move;
+            width: 150px; /* Tamaño inicial */
+            height: auto;
+        }
+
+        .draggable-image.selected {
+            border-color: #3b82f6; /* Borde azul al seleccionar */
+            z-index: 1000;
+        }
+
+        /* Controles de manipulación que aparecen al seleccionar una imagen */
+        .resize-handle, .rotate-handle, .delete-handle, .mirror-handle {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            display: none; /* Ocultos por defecto */
+            justify-content: center;
+            align-items: center;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 1001;
+        }
+
+        .selected .resize-handle, .selected .rotate-handle, .selected .delete-handle, .selected .mirror-handle {
+            display: flex; /* Se muestran al seleccionar */
+        }
+
+        .resize-handle { bottom: -12px; right: -12px; cursor: se-resize; }
+        .rotate-handle { top: -12px; right: -12px; cursor: alias; }
+        .delete-handle { top: -12px; left: -12px; background-color: #ef4444; }
+        .mirror-handle { bottom: -12px; left: -12px; background-color: #84cc16;}
+
+        /* Estilo para los botones flotantes del menú */
+        .floating-button {
+            transition: all 0.3s ease;
+        }
+        .floating-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        }
+    </style>
+</head>
+<body class="bg-gray-200 flex flex-col items-center justify-center h-screen overflow-hidden p-4">
+
+    <!-- Pantalla Principal de Diseño -->
+    <main id="design-screen" class="w-full max-w-sm h-full flex flex-col items-center">
+        <h1 class="text-2xl font-bold text-gray-700 mb-4">Diseña tu Forro</h1>
+        
+        <!-- Contenedor del Teléfono -->
+        <div id="phone-case-container" class="w-full aspect-[9/19.5] relative">
+            <div id="design-canvas">
+                <!-- Las imágenes añadidas aparecerán aquí -->
+            </div>
+            <div id="camera-cutout"></div>
+        </div>
+
+        <!-- Menú de Pie de Página -->
+        <footer id="footer-menu" class="mt-auto w-full max-w-sm p-4">
+            <div id="main-controls" class="flex justify-around items-center bg-white rounded-full shadow-lg p-2">
+                <!-- Botón para agregar imágenes -->
+                <label for="image-upload" class="floating-button cursor-pointer p-3 bg-blue-500 text-white rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                </label>
+                <input type="file" id="image-upload" multiple accept="image/*" class="hidden">
+                
+                <!-- Botón de edición de color (inicialmente deshabilitado) -->
+                <button id="color-edit-btn" disabled class="floating-button p-3 bg-gray-400 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 16v-2m8-8h2M4 12H2m15.364 6.364l1.414 1.414M5.636 5.636l1.414 1.414m12.728 0l-1.414 1.414M6.343 17.657l-1.414 1.414M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                </button>
+            </div>
+            
+            <!-- Controles contextuales para la imagen seleccionada (inicialmente ocultos) -->
+            <div id="contextual-controls" class="hidden flex justify-around items-center bg-white rounded-full shadow-lg p-2 mt-2">
+                 <!-- Estos se podrían llenar dinámicamente, pero por simplicidad los dejamos aquí -->
+            </div>
+        </footer>
+    </main>
+
+    <!-- Pantalla de Edición de Color (Oculta por defecto) -->
+    <div id="color-editor-screen" class="hidden fixed inset-0 bg-gray-800 bg-opacity-90 flex flex-col items-center justify-center p-4 z-50">
+        <!-- Controles Superiores: Deshacer / Rehacer -->
+        <div class="absolute top-4 right-4 flex gap-4">
+            <button class="w-12 h-12 bg-gray-600 text-white rounded-full flex items-center justify-center shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg></button>
+            <button class="w-12 h-12 bg-gray-600 text-white rounded-full flex items-center justify-center shadow-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>
+        </div>
+
+        <!-- Visor de la imagen a editar -->
+        <div class="w-full max-w-md mb-8">
+            <img id="image-to-edit" src="" class="max-w-full max-h-[50vh] object-contain rounded-lg">
+        </div>
+
+        <!-- Controles Deslizantes -->
+        <div id="slider-controls" class="w-full max-w-md bg-gray-700 p-4 rounded-lg">
+            <div class="mb-4">
+                <label class="text-white">Realzar</label>
+                <input type="range" min="0" max="200" value="100" class="w-full" data-filter="saturate">
+            </div>
+            <div class="mb-4">
+                <label class="text-white">Exposición</label>
+                <input type="range" min="0" max="200" value="100" class="w-full" data-filter="brightness">
+            </div>
+            <div>
+                <label class="text-white">Contraste</label>
+                <input type="range" min="0" max="200" value="100" class="w-full" data-filter="contrast">
+            </div>
+        </div>
+        
+        <!-- Menú de Herramientas de Edición (Histograma) -->
+        <div id="editor-tools" class="flex justify-center gap-8 mt-4">
+            <button class="p-3 bg-blue-500 rounded-full text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 16v-2m8-8h2M4 12H2m15.364 6.364l1.414 1.414M5.636 5.636l1.414 1.414m12.728 0l-1.414 1.414M6.343 17.657l-1.414 1.414M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg></button>
+            <button class="p-3 bg-gray-600 rounded-full text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg></button>
+        </div>
+
+        <!-- Controles Inferiores: Cancelar / Aceptar -->
+        <div class="absolute bottom-4 left-4">
+            <button id="cancel-edit" class="w-16 h-16 bg-gray-500 text-white rounded-full flex items-center justify-center text-4xl shadow-lg">&times;</button>
+        </div>
+        <div class="absolute bottom-4 right-4">
+            <button id="apply-edit" class="w-16 h-16 bg-green-500 text-white rounded-full flex items-center justify-center text-2xl shadow-lg">&#10003;</button>
+        </div>
+    </div>
+
+
+<script>
+    // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+    const designCanvas = document.getElementById('design-canvas');
+    const imageUpload = document.getElementById('image-upload');
+    const colorEditBtn = document.getElementById('color-edit-btn');
+    const designScreen = document.getElementById('design-screen');
+    const colorEditorScreen = document.getElementById('color-editor-screen');
+    const cancelEditBtn = document.getElementById('cancel-edit');
+    const applyEditBtn = document.getElementById('apply-edit');
+    const imageToEdit = document.getElementById('image-to-edit');
+    const sliderControls = document.getElementById('slider-controls');
+
+    let selectedImage = null; // Variable para guardar la imagen seleccionada
+    let imageCounter = 0; // Para dar un ID único a cada imagen
+
+    // --- LÓGICA PARA AGREGAR IMÁGENES ---
+    imageUpload.addEventListener('change', (event) => {
+        const files = event.target.files;
+        if (files.length > 10) {
+            alert("Puedes seleccionar un máximo de 10 imágenes.");
+            return;
+        }
+        for (const file of files) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                createDraggableImage(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // --- FUNCIÓN PARA CREAR UNA IMAGEN MANIPULABLE ---
+    function createDraggableImage(src) {
+        const id = `image-${imageCounter++}`;
+        const wrapper = document.createElement('div');
+        wrapper.id = id;
+        wrapper.className = 'draggable-image';
+        wrapper.style.left = '50px';
+        wrapper.style.top = '100px';
+
+        const img = document.createElement('img');
+        img.src = src;
+        img.className = "w-full h-full object-cover pointer-events-none"; // importante para que los eventos pasen al div
+        
+        // --- Controles de la imagen ---
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'resize-handle';
+        resizeHandle.innerHTML = '&#x21F2;'; // Icono de redimensionar
+
+        const rotateHandle = document.createElement('div');
+        rotateHandle.className = 'rotate-handle';
+        rotateHandle.innerHTML = '&#x21BB;'; // Icono de rotar
+
+        const deleteHandle = document.createElement('div');
+        deleteHandle.className = 'delete-handle';
+        deleteHandle.innerHTML = '&times;'; // Icono de 'X'
+        deleteHandle.onclick = () => {
+            wrapper.remove();
+            deselectAllImages();
+        };
+
+        const mirrorHandle = document.createElement('div');
+        mirrorHandle.className = 'mirror-handle';
+        mirrorHandle.innerHTML = '&#x21C4;'; // Icono de espejo
+        mirrorHandle.onclick = (e) => {
+            e.stopPropagation(); // Evita que se deseleccione la imagen
+            const currentScale = wrapper.style.transform.match(/scaleX\(([^)]+)\)/);
+            if (currentScale && currentScale[1] === '-1') {
+                 wrapper.style.transform = wrapper.style.transform.replace(/scaleX\(-1\)/, 'scaleX(1)');
+            } else {
+                 wrapper.style.transform += ' scaleX(-1)';
+            }
+        };
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(resizeHandle);
+        wrapper.appendChild(rotateHandle);
+        wrapper.appendChild(deleteHandle);
+        wrapper.appendChild(mirrorHandle);
+        designCanvas.appendChild(wrapper);
+
+        // Hacemos el wrapper seleccionable
+        wrapper.addEventListener('click', () => selectImage(wrapper));
+    }
+
+    // --- FUNCIONES DE SELECCIÓN ---
+    function selectImage(element) {
+        deselectAllImages(); // Primero deseleccionamos todas
+        selectedImage = element;
+        element.classList.add('selected');
+        colorEditBtn.disabled = false;
+        colorEditBtn.classList.replace('bg-gray-400', 'bg-green-500');
+    }
+
+    function deselectAllImages() {
+        document.querySelectorAll('.draggable-image').forEach(img => {
+            img.classList.remove('selected');
+        });
+        selectedImage = null;
+        colorEditBtn.disabled = true;
+        colorEditBtn.classList.replace('bg-green-500', 'bg-gray-400');
+    }
+    
+    // Deseleccionar si se hace clic fuera
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.draggable-image') && !e.target.closest('#footer-menu')) {
+            deselectAllImages();
+        }
+    });
+
+    // --- LÓGICA DE INTERACCIÓN CON `interact.js` ---
+    interact('.draggable-image')
+        .draggable({
+            listeners: {
+                move(event) {
+                    const target = event.target;
+                    const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                    const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute('data-x', x);
+                    target.setAttribute('data-y', y);
+                }
+            },
+            modifiers: [
+                interact.modifiers.restrictRect({
+                    restriction: 'parent'
+                })
+            ],
+            inertia: true
+        })
+        .resizable({
+            edges: { left: true, right: true, bottom: true, top: true },
+            listeners: {
+                move(event) {
+                    let { x, y } = event.target.dataset;
+                    x = (parseFloat(x) || 0) + event.deltaRect.left;
+                    y = (parseFloat(y) || 0) + event.deltaRect.top;
+
+                    Object.assign(event.target.style, {
+                        width: `${event.rect.width}px`,
+                        height: `${event.rect.height}px`,
+                        transform: `translate(${x}px, ${y}px)`
+                    });
+
+                    Object.assign(event.target.dataset, { x, y });
+                }
+            },
+            modifiers: [
+                 interact.modifiers.restrictSize({
+                    min: { width: 50, height: 50 }
+                })
+            ],
+            inertia: true
+        })
+        .on('tap', (event) => {
+            selectImage(event.currentTarget);
+            event.preventDefault();
+        });
+
+
+    // --- LÓGICA DE LA PANTALLA DE EDICIÓN DE COLOR ---
+    colorEditBtn.addEventListener('click', () => {
+        if (!selectedImage) return;
+
+        // Copiamos la imagen y sus filtros actuales al editor
+        const originalImg = selectedImage.querySelector('img');
+        imageToEdit.src = originalImg.src;
+        imageToEdit.style.filter = selectedImage.style.filter || '';
+
+        // Reseteamos los sliders a los valores actuales de la imagen
+        document.querySelectorAll('#slider-controls input').forEach(slider => {
+             const filterName = slider.dataset.filter;
+             const regex = new RegExp(`${filterName}\\(([^)]+)\\)`);
+             const match = imageToEdit.style.filter.match(regex);
+             if(match) {
+                 // Convertimos de '1.5' a '150' o 'saturate(1.5)' a '150'
+                 slider.value = parseFloat(match[1].includes('%') ? match[1] : match[1] * 100);
+             } else {
+                 slider.value = 100;
+             }
+        });
+        
+        designScreen.classList.add('hidden');
+        colorEditorScreen.classList.remove('hidden');
+    });
+
+    // Aplicar filtros en tiempo real al mover los sliders
+    sliderControls.addEventListener('input', (event) => {
+        if(event.target.type === 'range') {
+            applyFilters();
+        }
+    });
+
+    function applyFilters() {
+        let filterString = '';
+        document.querySelectorAll('#slider-controls input').forEach(slider => {
+            const filterName = slider.dataset.filter;
+            const value = slider.value;
+            // 'saturate(1.5)' o 'brightness(1.2)'
+            filterString += `${filterName}(${value}%) `;
+        });
+        imageToEdit.style.filter = filterString.trim();
+    }
+
+
+    // Botón para aplicar los cambios de color
+    applyEditBtn.addEventListener('click', () => {
+        if (selectedImage) {
+            // Guardamos los filtros en la imagen original del canvas
+            selectedImage.style.filter = imageToEdit.style.filter;
+        }
+        closeColorEditor();
+    });
+
+    // Botón para cancelar la edición de color
+    cancelEditBtn.addEventListener('click', () => {
+        closeColorEditor();
+    });
+
+    function closeColorEditor() {
+        colorEditorScreen.classList.add('hidden');
+        designScreen.classList.remove('hidden');
+    }
+
+</script>
+</body>
+</html>

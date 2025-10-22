@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Editor de Fotos (Corregido) <V1 class="3"></V1></title>
+    <title>Editor de Fotos (V1.03 - Corregido)</title>
     
     <style>
         /* CSS (Exactamente igual que antes ok todo fino) */
@@ -70,7 +70,7 @@
 <body>
 
     <main id="editor-area">
-        <div style="text-align: center; padding-top: 50px; color: #999;">Toca el clip para añadir fotos</div>
+        <div style="text-align: center; padding-top: 50px; color: #999;">V1.04 Toca el clip para añadir fotos </div>
     </main>
 
     <button id="addPhotoBtn" aria-label="Agregar fotos">
@@ -117,103 +117,106 @@
             fileInput.value = null;
         }
 
-        // --- PASO 3: FUNCIÓN DE EDICIÓN (ACTUALIZADA) ---
+        
+        // --- PASO 3: FUNCIÓN DE EDICIÓN (ACTUALIZADA V1.03) ---
         
         function createImageEditor(imageUrl) {
-            // 1. Crear elementos (Igual que antes)
+            // 1. Crear los elementos HTML (sin cambios)
             const wrapper = document.createElement('div');
             wrapper.className = 'image-wrapper';
+            
             const img = document.createElement('img');
             img.src = imageUrl;
+            
             wrapper.appendChild(img);
             editorArea.appendChild(wrapper);
 
-            // 2. "ESTADO" independiente de esta imagen
-            // 'current' = el valor "en vivo" mientras se transforma
+            // 2. Definir el "ESTADO" independiente (sin cambios)
+            // 'current' es el estado visual actual y persistente.
             let currentScale = 1;
             let currentRotation = 0;
-            let currentX = 0;
+            let currentX = 0; 
             let currentY = 0;
             
-            // 'last' = el valor "ancla" que se guarda al INICIAR un gesto
+            // 'last' solo guardará el estado al INICIO de un gesto.
             let lastScale = 1;
             let lastRotation = 0;
             let lastX = 0;
             let lastY = 0;
 
-            // 3. Inicializar Hammer.js
+            // 3. Inicializar Hammer.js (sin cambios)
             const hammer = new Hammer(wrapper);
-
-            // Habilitar gestos
             hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
             hammer.get('pinch').set({ enable: true });
             hammer.get('rotate').set({ enable: true });
 
-            // --- CAMBIO CLAVE (1): Reconocer gestos simultáneos ---
-            // Esto permite que "pan" (mover) funcione AL MISMO TIEMPO
-            // que "pinch" (escalar) y "rotate" (rotar).
-            hammer.get('pinch').recognizeWith(hammer.get('rotate'));
-            hammer.get('pan').recognizeWith([hammer.get('pinch'), hammer.get('rotate')]);
-
-
-            // --- CAMBIO CLAVE (2): Guardar el estado al INICIAR el toque ---
-            // 'hammer.input' es el evento más básico.
-            // 'ev.isFirst' es true solo en el primer fotograma del primer toque.
-            hammer.on('hammer.input', (ev) => {
-                if (ev.isFirst) {
-                    // Guardamos el estado ACTUAL como nuestro "ancla" (last)
-                    lastScale = currentScale;
-                    lastRotation = currentRotation;
-                    lastX = currentX;
-                    lastY = currentY;
-                }
-            });
             
-            // Poner la imagen al frente cuando se toca
-            hammer.on('panstart pinchstart rotatestart', () => {
-                wrapper.style.zIndex = 100;
-            });
-            
-            // Devolverla a su z-index normal al soltar
-            hammer.on('panend pinchend rotateend', () => {
-                 wrapper.style.zIndex = 10;
-            });
+            // --- 4. Asignar eventos de gestos ---
 
+            // Esta función "ancla" el estado actual. Se llama al inicio de CUALQUIER gesto.
+            // (Sin cambios, esta función es correcta)
+            function syncStartState() {
+                wrapper.style.zIndex = 100; // Poner al frente
+                
+                // Copia el estado VISIBLE actual al estado 'last' (ancla)
+                lastScale = currentScale;
+                lastRotation = currentRotation;
+                lastX = currentX;
+                lastY = currentY;
+            }
 
-            // --- 4. Asignar eventos de gestos (Lógica actualizada) ---
+            // Asignamos la misma función a TODOS los eventos "start"
+            // (Sin cambios)
+            hammer.on('panstart', syncStartState);
+            hammer.on('pinchstart', syncStartState);
+            hammer.on('rotatestart', syncStartState);
 
             // ARRASTRAR (Mover)
+            // (Sin cambios)
             hammer.on('pan', (ev) => {
-                // Calculamos el nuevo 'current' basado en el 'last' + el cambio (delta)
+                // El nuevo 'current' se basa en el 'last' + delta
                 currentX = lastX + ev.deltaX;
                 currentY = lastY + ev.deltaY;
                 applyTransform();
             });
 
             // PELLIZCAR (Tamaño/Zoom)
+            // (Sin cambios)
             hammer.on('pinch', (ev) => {
-                // Calculamos la nueva escala basada en la 'last' * el multiplicador
                 currentScale = lastScale * ev.scale;
                 applyTransform();
             });
 
             // ROTAR (Orientación)
+            // (Sin cambios)
             hammer.on('rotate', (ev) => {
-                // Calculamos la nueva rotación basada en la 'last' + los grados rotados
                 currentRotation = lastRotation + ev.rotation;
                 applyTransform();
             });
 
-            // 5. Función que aplica todos los cambios
+            // --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
+            // Detectar el final del gesto
+            hammer.on('hammer.input', (ev) => {
+                if (ev.isFinal) {
+                    // Al soltar, solo devolvemos el z-index a la normalidad.
+                    wrapper.style.zIndex = 10; 
+                    
+                    // ¡YA NO guardamos el estado aquí!
+                    // Las variables 'current...' YA tienen el valor final correcto.
+                    // 'last...' solo se actualizará la próxima vez que
+                    // el usuario toque la imagen (en syncStartState).
+                }
+            });
+
+            // 5. Función que aplica todos los cambios (sin cambios)
             function applyTransform() {
-                // Aplicamos los valores "current" al CSS
                 wrapper.style.transform = 
                     `translate3d(${currentX}px, ${currentY}px, 0) ` +
                     `scale(${currentScale}) ` +
                     `rotate(${currentRotation}deg)`;
             }
             
-            // Aplicar la transformación inicial (centrado)
+            // Aplicar la transformación inicial (sin cambios)
             applyTransform();
         }
 

@@ -141,81 +141,85 @@
             let lastX = 0;
             let lastY = 0;
 
-            // 3. Inicializar Hammer.js
-            const hammer = new Hammer(wrapper);
 
-            // Habilitar gestos
-            hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
-            hammer.get('pinch').set({ enable: true });
-            hammer.get('rotate').set({ enable: true });
+            // 3. Inicializar Hammer.js
+            
+			const hammer = new Hammer(wrapper);
+			// Habilitar gestos
+			hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+			hammer.get('pinch').set({ enable: true });
+			hammer.get('rotate').set({ enable: true });
 
             // --- CAMBIO CLAVE (1): Reconocer gestos simultáneos ---
             // Esto permite que "pan" (mover) funcione AL MISMO TIEMPO
             // que "pinch" (escalar) y "rotate" (rotar).
-            hammer.get('pinch').recognizeWith(hammer.get('rotate'));
-            hammer.get('pan').recognizeWith([hammer.get('pinch'), hammer.get('rotate')]);
+			hammer.get('pinch').recognizeWith(hammer.get('rotate'));
+			hammer.get('pan').recognizeWith([hammer.get('pinch'), hammer.get('rotate')]);
 
+			// --- Control de modo de gesto ---
+			// 'none' | 'single' | 'multi'
+			let gestureMode = 'none';
+			let activePointers = 0;
 
-            // --- CAMBIO CLAVE (2): Guardar el estado al INICIAR el toque ---
-            // 'hammer.input' es el evento más básico.
-            // 'ev.isFirst' es true solo en el primer fotograma del primer toque.
-            hammer.on('hammer.input', (ev) => {
-                if (ev.isFirst) {
-                    // Guardamos el estado ACTUAL como nuestro "ancla" (last)
-                    lastScale = currentScale;
-                    lastRotation = currentRotation;
-                    lastX = currentX;
-                    lastY = currentY;
-                }
-            });
-            
-            // Poner la imagen al frente cuando se toca
-            hammer.on('panstart pinchstart rotatestart', () => {
-                wrapper.style.zIndex = 100;
-            });
-            
-            // Devolverla a su z-index normal al soltar
-            hammer.on('panend pinchend rotateend', () => {
-                 wrapper.style.zIndex = 10;
-            });
+			function anchorState() {
+			  // Guardamos estados actuales al comenzar/cortar gesto
+			  lastScale = currentScale;
+			  lastRotation = currentRotation;
+			  lastX = currentX;
+			  lastY = currentY;
+			}
 
+			hammer.on('hammer.input', (ev) => {
+			  activePointers = ev.pointers.length;									   
+			  if (ev.isFirst) {
+				gestureMode = (activePointers >= 2) ? 'multi' : 'single';
+				anchorState();
+			  }
+			  // Si el gesto era multi y quedó con menos de 2 dedos, detenemos edición
+    			  if (gestureMode === 'multi' && activePointers < 2) {
+					gestureMode = 'none';
+					anchorState();
+				  }
+				  if (ev.isFinal) {
+					gestureMode = 'none';
+				  }
+				});
 
-            // --- 4. Asignar eventos de gestos (Lógica actualizada) ---
+				// Z-index para resaltar mientras se edita
+				hammer.on('panstart pinchstart rotatestart', () => {
+				  if (gestureMode !== 'none') wrapper.style.zIndex = 100;
+				});
+				hammer.on('panend pinchend rotateend', () => {
+				  wrapper.style.zIndex = 10;
+				});
 
-            // ARRASTRAR (Mover)
-            hammer.on('pan', (ev) => {
-                // Calculamos el nuevo 'current' basado en el 'last' + el cambio (delta)
-                currentX = lastX + ev.deltaX;
-                currentY = lastY + ev.deltaY;
-                applyTransform();
-            });
+				// PAN: permitido si el gesto está activo
+				hammer.on('pan', (ev) => {
+				  if (gestureMode === 'none') return;
+				  currentX = lastX + ev.deltaX;
+				  currentY = lastY + ev.deltaY;
+				  applyTransform();
+				});
 
-            // PELLIZCAR (Tamaño/Zoom)
-            hammer.on('pinch', (ev) => {
-                // Calculamos la nueva escala basada en la 'last' * el multiplicador
-                currentScale = lastScale * ev.scale;
-                applyTransform();
-            });
+				// PINCH: solo en multi
+				hammer.on('pinch', (ev) => {
+				  if (gestureMode !== 'multi') return;
+				  currentScale = lastScale * ev.scale;
+				  applyTransform();
+				});
 
-            // ROTAR (Orientación)
-            hammer.on('rotate', (ev) => {
-                // Calculamos la nueva rotación basada en la 'last' + los grados rotados
-                currentRotation = lastRotation + ev.rotation;
-                applyTransform();
-            });
+				// ROTATE: solo en multi
+				hammer.on('rotate', (ev) => {
+				  if (gestureMode !== 'multi') return;
+				  currentRotation = lastRotation + ev.rotation;
+				  applyTransform();
+				});
 
-            // 5. Función que aplica todos los cambios
-            function applyTransform() {
-                // Aplicamos los valores "current" al CSS
-                wrapper.style.transform = 
-                    `translate3d(${currentX}px, ${currentY}px, 0) ` +
-                    `scale(${currentScale}) ` +
-                    `rotate(${currentRotation}deg)`;
-            }
-            
-            // Aplicar la transformación inicial (centrado)
-            applyTransform();
-        }
+							 
+							
+				// Aplicar la transformación inicial (centrado)
+				applyTransform();
+				}
 
     </script>
 </body>
